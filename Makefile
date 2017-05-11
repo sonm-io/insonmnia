@@ -50,6 +50,9 @@ test:
 	fi done;
 	@sed -ie '2!s/mode: set//;/^$$/d' coverage.txt
 
+grpc:
+	go generate -x ./daemon/miner
+
 coverage:
 	${GO} tool cover -func=coverage.txt
 	${GO} tool cover -func=coverage.txt -o funccoverage.txt

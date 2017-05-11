@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package miner;
+
+// The miner service definition.
+service Miner {
+  // Sends a spawn request
+  rpc Spawn (SpawnRequest) returns (SpawnReply) {}
+}
+
+message SpawnRequest {
+  string name = 1;
+}
+
+message SpawnReply {
+  string message = 1;
+}
