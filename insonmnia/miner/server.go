@@ -15,6 +15,12 @@ import (
 	"github.com/hashicorp/yamux"
 	log "github.com/noxiouz/zapctx/ctxlog"
 	pb "github.com/sonm-io/insonmnia/proto/miner"
+
+
+	"github.com/sonm-io/Fusrodah"
+	"github.com/sonm-io/go-ethereum/whisper/whisperv2"
+	"github.com/sonm-io/go-ethereum/crypto"
+	"crypto/ecdsa"
 )
 
 // Miner holds information about jobs, make orders to Observer and communicates with Hub
@@ -167,8 +173,47 @@ func (m *Miner) Serve() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		// TODO: inject real discovery here
 		var address = m.hubaddress
+
+		//------- <!-- Fusrodah implementation-------//
+		c := make(chan bool, 1)
+
+		key := Key{}
+		if !key.Load(){
+			key.Generate()
+			key.Save()
+		}
+		frd := Fusrodah.Fusrodah{Prv: key.prv}
+		frd.Start()
+
+		var hubPubKeyString *ecdsa.PublicKey
+
+		go func() {
+
+			defer frd.Send(key.GetPubKeyString(), nil, "hub", "discover")
+			frd.AddHandling(nil, func(msg *whisperv2.Message) {
+				hubPubKeyString = crypto.ToECDSAPub(msg.Payload)
+				c <- true
+			}, "miner", "discover")
+
+		}()
+
+		<- c
+
+		go func() {
+
+			defer frd.Send(key.GetPubKeyString(), hubPubKeyString, "hub", "addr")
+			frd.AddHandling(&key.prv.PublicKey, func(msg *whisperv2.Message) {
+				address = string(msg.Payload)
+			}, "miner", "addr")
+			c <- true
+		}()
+
+		<- c
+
+		//------- Fusrodah implementation --> -------//
+
+		//var address = m.hubaddress
 		for {
 			m.connectToHub(address)
 			select {
