@@ -59,3 +59,14 @@ func (key *Key) Save() bool{
 	}
 	return true
 }
+
+func (key *Key) GetPubKey() *ecdsa.PublicKey{
+	pkBytes := crypto.FromECDSA(key.prv)
+	pk := crypto.ToECDSAPub(pkBytes)
+	return pk
+}
+
+func (key *Key) GetPubKeyString() string{
+	pkString := string(crypto.FromECDSAPub(&key.prv.PublicKey))
+	return pkString
+}

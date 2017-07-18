@@ -16,6 +16,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/sonm-io/go-ethereum/crypto"
+	"github.com/sonm-io/Fusrodah"
+	"github.com/sonm-io/go-ethereum/whisper/whisperv2"
 )
 
 const (
@@ -157,6 +161,32 @@ func New(ctx context.Context) (*Hub, error) {
 // Serve starts handling incoming API gRCP request and communicates
 // with miners
 func (h *Hub) Serve() error {
+
+
+	//------- <!-- Fusrodah implementation-------//
+	key := Key{}
+	if !key.Load(){
+		key.Generate()
+		key.Save()
+	}
+
+	frd := Fusrodah.Fusrodah{Prv: key.prv}
+	frd.Start()
+
+	frd.AddHandling(nil, func(msg *whisperv2.Message) {
+		receivedPubKey := crypto.ToECDSAPub(msg.Payload)
+
+		frd.Send(key.GetPubKeyString(), receivedPubKey, "miner", "discover")
+	}, "hub", "discover")
+
+	frd.AddHandling(&key.prv.PublicKey, func(msg *whisperv2.Message) {
+		receivedPubKey := crypto.ToECDSAPub(msg.Payload)
+		frd.Send(Fusrodah.GetLocalIP(), receivedPubKey, "miner", "addr")
+	}, "hub", "addr")
+	//------- Fusrodah implementation --> -------//
+
+
+
 	il, err := net.Listen("tcp", minerHubInterconnectEndpoint)
 	if err != nil {
 		log.G(h.ctx).Error("failed to listen", zap.String("address", minerHubInterconnectEndpoint), zap.Error(err))
