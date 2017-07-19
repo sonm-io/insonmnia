@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"sync"
 
@@ -13,6 +15,7 @@ import (
 	pbminer "github.com/sonm-io/insonmnia/proto/miner"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/context/ctxhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,6 +32,8 @@ type Hub struct {
 	ctx           context.Context
 	externalGrpc  *grpc.Server
 	minerListener net.Listener
+
+	pubipadr net.IP
 
 	mu     sync.Mutex
 	miners map[string]*MinerCtx
@@ -142,9 +147,38 @@ func (h *Hub) StopTask(ctx context.Context, request *pb.StopTaskRequest) (*pb.St
 func New(ctx context.Context) (*Hub, error) {
 	// TODO: add secure mechanism
 	grpcServer := grpc.NewServer()
+
+	// get the public ip
+	resp, err := ctxhttp.Get(ctx, nil, "http://checkip.amazonaws.com/")
+	if err != nil {
+		// handle error
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		// handle error
+	}
+
+	n := bytes.IndexByte(body, '\n')
+	s := string(body[:n])
+
+	pubipadr := net.ParseIP(s)
+	isV6 := pubipadr.To4() == nil
+	isPubLocal := pubipadr.IsInterfaceLocalMulticast()
+
+	log.G(ctx).Info(
+		"Collected Public IP information:",
+		zap.String("address", pubipadr.String()),
+		zap.Bool("isV6", isV6),
+		zap.Bool("isPubLocal", isPubLocal),
+	)
+
 	h := &Hub{
 		ctx:          ctx,
 		externalGrpc: grpcServer,
+
+		pubipadr:     pubipadr,
 
 		tasks:  make(map[string]string),
 		miners: make(map[string]*MinerCtx),
